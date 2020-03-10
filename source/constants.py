@@ -28,11 +28,11 @@ cpi_country_mapping = {
 
 wb_covariates = [
     ('SH.XPD.CHEX.PC.CD',
-        'healthcare_spending_per_capita'),
+        'healthcare_spend_per_capita'),
     ('HD.HCI.OVRL',
         'hci'),
-    ('SH.MED.PHYS.ZS',
-        'physicians_per_capita'),
+    # ('SH.MED.PHYS.ZS',
+    #     'physicians_per_capita'),
     ('SP.POP.65UP.TO.ZS',
         'population_perc_over65'),
     ('SP.RUR.TOTL.ZS',

@@ -1,4 +1,6 @@
 
+import numpy as np
+
 import pymc3 as pm
 
 
@@ -9,18 +11,21 @@ def initialize_model(df):
     # (1) days since first case: upper
     # mu_0 to reflect asymptotic mortality rate months after outbreak
     _normalize_col(df, 'days_since_first_case', how='upper')
-    # (2) healthcare spending: mean
-    # could also be upper, but for now take agnostic approach
-    _normalize_col(df, 'healthcare_spending_per_capita', how='mean')
-    # (3) hci = human capital index: upper
-    # HCI measures education/health; mu_0 should reflect best scenario
-    _normalize_col(df, 'hci', how='upper')
-    # (4) % over 65: mean
-    # mu_0 to reflect average world demographic
-    _normalize_col(df, 'population_perc_over65', how='mean')
-    # (5) CPI score: upper
+    # (2) CPI score: upper
     # mu_0 to reflect scenario in absence of corrupt govts
     _normalize_col(df, 'cpi_score_2019', how='upper')
+    # (3) healthcare spending: mean
+    # could also be upper, but for now take agnostic approach
+    _normalize_col(df, 'healthcare_spend_per_capita', how='mean')
+    # (4) hci = human capital index: upper
+    # HCI measures education/health; mu_0 should reflect best scenario
+    _normalize_col(df, 'hci', how='upper')
+    # (5) % over 65: mean
+    # mu_0 to reflect average world demographic
+    _normalize_col(df, 'population_perc_over65', how='mean')
+    # (6) % rural: mean
+    # mu_0 to reflect average world demographic
+    _normalize_col(df, 'population_perc_rural', how='mean')
 
     n = len(df)
 
@@ -31,32 +36,37 @@ def initialize_model(df):
         # Priors:
         mu_0 = pm.Beta('mu_0', alpha=0.1, beta=10)
         sig_0 = pm.Uniform('sig_0', lower=0.0, upper=mu_0 * (1 - mu_0))
-        # beta = pm.Normal('beta', mu=0, sigma=10, shape=5)
-        # sigma = pm.HalfNormal('sigma', sigma=1)
+        beta = pm.Normal('beta', mu=0, sigma=10, shape=6)
+        sigma = pm.HalfNormal('sigma', sigma=10)
 
         # Model mu from country-wise covariates:
-        # mu_est = mu_0 + \
-        #     beta[0] * df['days_since_first_case_normalized'].values + \
-        #     beta[1] * df['healthcare_spending_per_capita_normalized'].values + \
-        #     beta[2] * df['hci_normalized'].values + \
-        #     beta[3] * df['population_perc_over65_normalized'].values + \
-        #     beta[4] * df['cpi_score_2019_normalized'].values
-        # mu_model = pm.Normal('mu_model', mu=mu_est, sigma=sigma, shape=len(df))
+        # Apply logit transformation so logistic regression performed
+        mu_0_logit = np.log(mu_0 / (1 - mu_0))
+        mu_est = mu_0_logit + \
+            beta[0] * df['days_since_first_case_normalized'].values + \
+            beta[1] * df['cpi_score_2019_normalized'].values + \
+            beta[2] * df['healthcare_spend_per_capita_normalized'].values + \
+            beta[3] * df['hci_normalized'].values + \
+            beta[4] * df['population_perc_over65_normalized'].values + \
+            beta[5] * df['population_perc_rural_normalized'].values
+        mu_model_logit = pm.Normal('mu_model_logit',
+                                   mu=mu_est,
+                                   sigma=sigma,
+                                   shape=n)
+        # Transform back to probability space:
+        mu_model = np.exp(mu_model_logit) / (np.exp(mu_model_logit) + 1)
 
         # tau_i, mortality rate for each country
-        # Parametrize with (mu, kappa) (e.g. mean, concentration)
+        # Parametrize with (mu, sigma)
         # instead of (alpha, beta) to ease interpretability.
-        # alpha = mu*kappa
-        # beta = (1 - mu)*kappa
-        # tau = pm.Beta('tau', mu=mu_model, sigma=kappa, shape=len(df))
-        tau = pm.Beta('tau', mu=mu_0, sigma=sig_0, shape=n)
+        tau = pm.Beta('tau', mu=mu_model, sigma=sig_0, shape=n)
+        # tau = pm.Beta('tau', mu=mu_0, sigma=sig_0, shape=n)
 
         # Binomial likelihood:
         d_obs = pm.Binomial('d_obs',
                             n=df['cases'].values,
                             p=tau,
                             observed=df['deaths'].values)
-
 
     return covid_mortality_model
 
