@@ -114,7 +114,7 @@ def _compute_days_since_first_case(df_cases):
     days_since_first_case = date_first_case.apply(
         lambda x: (df_cases.columns.max() - x).days)
     # Add 2 months for China, since outbreak started late 2019:
-    days_since_first_case.loc['Mainland China'] += 60
+    days_since_first_case.loc['Mainland China'] += 30
 
     return days_since_first_case
 

@@ -42,8 +42,6 @@ wb_covariates = [
         'healthcare_oop_expenditure'),
     ('HD.HCI.OVRL',
         'hci'),
-    # ('SH.MED.PHYS.ZS',
-    #     'physicians_per_capita'),
     ('SP.POP.65UP.TO.ZS',
         'population_perc_over65'),
     ('SP.RUR.TOTL.ZS',
