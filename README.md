@@ -11,7 +11,7 @@ As of March 10, the overall reported mortality rate is 3.5%. However, this figur
 
 ### See the full analysis here:
 
-* [COVID-19 Mortality Analysis]("COVID-19 Mortality Rate.ipynb")
+* [COVID-19 Mortality Analysis](COVID-19 Mortality Rate.ipynb)
 
 
 For questions or comments email [Joseph Richards](joeyrichar@gmail.com).
