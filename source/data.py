@@ -1,6 +1,7 @@
 from datetime import datetime
 import os
 
+import numpy as np
 import pandas as pd
 
 from . import constants
@@ -87,19 +88,29 @@ def _rollup_by_country(df):
 def _clean_country_list(df):
     ''' Clean up input country list in df '''
     # handle recent changes in country names:
-    if 'Hong Kong SAR' in df.index:
-        df.loc['Hong Kong'] = df.loc['Hong Kong'] + df.loc['Hong Kong SAR']
-    if 'Iran (Islamic Republic of)' in df.index:
-        df.loc['Iran'] = df.loc['Iran'] + df.loc['Iran (Islamic Republic of)']
-    if 'Viet Nam' in df.index:
-        df.loc['Vietnam'] = df.loc['Vietnam'] + df.loc['Viet Nam']
-    if 'Russian Federation' in df.index:
-        df.loc['Russia'] = df.loc['Russia'] + df.loc['Russian Federation']
-    if 'Republic of Korea' in df.index:
-        df.loc['South Korea'] = \
-            df.loc['South Korea'] + df.loc['Republic of Korea']
-    if 'Republic of Moldova' in df.index:
-        df.loc['Moldova'] = df.loc['Moldova'] + df.loc['Republic of Moldova']
+    country_rename = {
+        'Hong Kong SAR': 'Hong Kong',
+        'Iran (Islamic Republic of)': 'Iran',
+        'Viet Nam': 'Vietnam',
+        'Russian Federation': 'Russia',
+        'Republic of Korea': 'South Korea',
+        'Republic of Moldova': 'Moldova'
+    }
+    df.rename(country_rename, axis=0, inplace=True)
+
+    # if 'Hong Kong SAR' in df.index:
+    #     df.loc['Hong Kong'] = df.loc['Hong Kong'] + df.loc['Hong Kong SAR']
+    # if 'Iran (Islamic Republic of)' in df.index:
+    #    df.loc['Iran'] = df.loc['Iran'] + df.loc['Iran (Islamic Republic of)']
+    # if 'Viet Nam' in df.index:
+    #     df.loc['Vietnam'] = df.loc['Vietnam'] + df.loc['Viet Nam']
+    # if 'Russian Federation' in df.index:
+    #     df.loc['Russia'] = df.loc['Russia'] + df.loc['Russian Federation']
+    # if 'Republic of Korea' in df.index:
+    #     df.loc['South Korea'] = \
+    #         df.loc['South Korea'] + df.loc['Republic of Korea']
+    # if 'Republic of Moldova' in df.index:
+    #     df.loc['Moldova'] = df.loc['Moldova'] + df.loc['Republic of Moldova']
 
     df.drop(constants.ignore_countries, axis=0, inplace=True, errors='ignore')
 
@@ -164,10 +175,10 @@ def _get_most_recent_value(wb_series):
     ts_data = wb_series[wb_series.columns[3::]]
 
     def _helper(row):
-        row_nn = row[ts_data.iloc[0].notnull()]
+        row_nn = row[row.notnull()]
         if len(row_nn):
             return row_nn[-1]
         else:
-            return 0.0
+            return np.nan
 
     return ts_data.apply(_helper, axis=1)

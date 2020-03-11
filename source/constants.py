@@ -40,6 +40,8 @@ cpi_country_mapping = {
 wb_covariates = [
     ('SH.XPD.OOPC.CH.ZS',
         'healthcare_oop_expenditure'),
+    ('SH.MED.BEDS.ZS',
+        'hospital_beds'),
     ('HD.HCI.OVRL',
         'hci'),
     ('SP.POP.65UP.TO.ZS',

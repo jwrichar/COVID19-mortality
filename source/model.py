@@ -17,13 +17,16 @@ def initialize_model(df):
     # (3) healthcare OOP spending: mean
     # not sure which way this will go
     _normalize_col(df, 'healthcare_oop_expenditure', how='mean')
-    # (4) hci = human capital index: upper
+    # (4) hospital beds: upper
+    # more beds, more healthcare and tests
+    _normalize_col(df, 'hospital_beds', how='upper')
+    # (5) hci = human capital index: upper
     # HCI measures education/health; mu_0 should reflect best scenario
     _normalize_col(df, 'hci', how='upper')
-    # (5) % over 65: mean
+    # (6) % over 65: mean
     # mu_0 to reflect average world demographic
     _normalize_col(df, 'population_perc_over65', how='mean')
-    # (6) % rural: mean
+    # (7) % rural: mean
     # mu_0 to reflect average world demographic
     _normalize_col(df, 'population_perc_rural', how='mean')
 
@@ -34,10 +37,10 @@ def initialize_model(df):
     with covid_mortality_model:
 
         # Priors:
-        mu_0 = pm.Beta('mu_0', alpha=0.1, beta=10)
+        mu_0 = pm.Beta('mu_0', alpha=0.3, beta=10)
         sig_0 = pm.Uniform('sig_0', lower=0.0, upper=mu_0 * (1 - mu_0))
-        beta = pm.Normal('beta', mu=0, sigma=10, shape=6)
-        sigma = pm.HalfNormal('sigma', sigma=10)
+        beta = pm.Normal('beta', mu=0, sigma=5, shape=7)
+        sigma = pm.HalfNormal('sigma', sigma=5)
 
         # Model mu from country-wise covariates:
         # Apply logit transformation so logistic regression performed
@@ -46,9 +49,10 @@ def initialize_model(df):
             beta[0] * df['days_since_first_case_normalized'].values + \
             beta[1] * df['cpi_score_2019_normalized'].values + \
             beta[2] * df['healthcare_oop_expenditure_normalized'].values + \
-            beta[3] * df['hci_normalized'].values + \
-            beta[4] * df['population_perc_over65_normalized'].values + \
-            beta[5] * df['population_perc_rural_normalized'].values
+            beta[3] * df['hospital_beds_normalized'].values + \
+            beta[4] * df['hci_normalized'].values + \
+            beta[5] * df['population_perc_over65_normalized'].values + \
+            beta[6] * df['population_perc_rural_normalized'].values
         mu_model_logit = pm.Normal('mu_model_logit',
                                    mu=mu_est,
                                    sigma=sigma,
