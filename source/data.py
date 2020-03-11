@@ -86,6 +86,21 @@ def _rollup_by_country(df):
 
 def _clean_country_list(df):
     ''' Clean up input country list in df '''
+    # handle recent changes in country names:
+    if 'Hong Kong SAR' in df.index:
+        df.loc['Hong Kong'] = df.loc['Hong Kong'] + df.loc['Hong Kong SAR']
+    if 'Iran (Islamic Republic of)' in df.index:
+        df.loc['Iran'] = df.loc['Iran'] + df.loc['Iran (Islamic Republic of)']
+    if 'Viet Nam' in df.index:
+        df.loc['Vietnam'] = df.loc['Vietnam'] + df.loc['Viet Nam']
+    if 'Russian Federation' in df.index:
+        df.loc['Russia'] = df.loc['Russia'] + df.loc['Russian Federation']
+    if 'Republic of Korea' in df.index:
+        df.loc['South Korea'] = \
+            df.loc['South Korea'] + df.loc['Republic of Korea']
+    if 'Republic of Moldova' in df.index:
+        df.loc['Moldova'] = df.loc['Moldova'] + df.loc['Republic of Moldova']
+
     df.drop(constants.ignore_countries, axis=0, inplace=True, errors='ignore')
 
 

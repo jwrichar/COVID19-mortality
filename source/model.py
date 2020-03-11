@@ -14,9 +14,9 @@ def initialize_model(df):
     # (2) CPI score: upper
     # mu_0 to reflect scenario in absence of corrupt govts
     _normalize_col(df, 'cpi_score_2019', how='upper')
-    # (3) healthcare spending: mean
-    # could also be upper, but for now take agnostic approach
-    _normalize_col(df, 'healthcare_spend_per_capita', how='mean')
+    # (3) healthcare OOP spending: lower
+    # more tests performed where private cost is least
+    _normalize_col(df, 'healthcare_oop_expenditure', how='lower')
     # (4) hci = human capital index: upper
     # HCI measures education/health; mu_0 should reflect best scenario
     _normalize_col(df, 'hci', how='upper')
@@ -45,7 +45,7 @@ def initialize_model(df):
         mu_est = mu_0_logit + \
             beta[0] * df['days_since_first_case_normalized'].values + \
             beta[1] * df['cpi_score_2019_normalized'].values + \
-            beta[2] * df['healthcare_spend_per_capita_normalized'].values + \
+            beta[2] * df['healthcare_oop_expenditure_normalized'].values + \
             beta[3] * df['hci_normalized'].values + \
             beta[4] * df['population_perc_over65_normalized'].values + \
             beta[5] * df['population_perc_rural_normalized'].values

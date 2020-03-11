@@ -7,15 +7,26 @@ ignore_countries = [
     'Gibraltar',
     'Vatican City',
     'St. Martin',
+    'Saint Martin',
     'Monaco',
     'Martinique',
     'Liechtenstein',
     'Faroe Islands',
     'Macau',
     'Palestine',
+    'occupied Palestinian territory',
     'French Guiana',
     'Taiwan',
-    'San Marino'
+    'Taipei and environs',
+    'San Marino',
+    'Holy See',
+    'Hong Kong SAR',
+    'Iran (Islamic Republic of)',
+    'Macao SAR',
+    'Viet Nam',
+    'Russian Federation',
+    'Republic of Korea',
+    'Republic of Moldova'
 ]
 
 cpi_country_mapping = {
@@ -27,8 +38,8 @@ cpi_country_mapping = {
 
 
 wb_covariates = [
-    ('SH.XPD.CHEX.PC.CD',
-        'healthcare_spend_per_capita'),
+    ('SH.XPD.OOPC.CH.ZS',
+        'healthcare_oop_expenditure'),
     ('HD.HCI.OVRL',
         'hci'),
     # ('SH.MED.PHYS.ZS',
