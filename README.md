@@ -9,9 +9,9 @@ The observed mortality of COVID-19 has varied widely from country to country (as
 
 As of March 10, the overall reported mortality rate is 3.5%. However, this figure does not account for systematic biases in case reporting and testing in countries for which the outbreak is more mature.  The point of our modelling work here is to try to understand and correct for the country-to-country differences that may cause the observed discrepancies in COVID-19 country-wide mortality rates. That way we can "undo" those biases and try to pin down an overall real mortality rate.
 
-### See the full analysis here:
+## See the full analysis here:
 
-* [COVID-19 Mortality Analysis](COVID-19 Mortality Rate.ipynb)
+* [COVID-19 Mortality Analysis](COVID-19%20Mortality%20Rate.ipynb)
 
 
 For questions or comments email [Joseph Richards](joeyrichar@gmail.com).
