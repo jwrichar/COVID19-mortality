@@ -33,6 +33,7 @@ def get_all_data():
                            'deaths': covid_deaths_rollup[todays_date]})
 
     _clean_country_list(df_out)
+    _clean_country_list(covid_cases_rollup)
 
     # Add observed death rate:
     df_out['death_rate_observed'] = df_out.apply(
@@ -48,6 +49,13 @@ def get_all_data():
 
     # Add World Bank covariates:
     _add_wb_data(df_out)
+
+    # Drop any country w/o covariate data:
+    num_null = df_out.isnull().sum(axis=1)
+    to_drop_idx = df_out.index[num_null > 1]
+    print('Dropping %i/%i countries due to lack of data' %
+          (len(to_drop_idx), len(df_out)))
+    df_out.drop(to_drop_idx, axis=0, inplace=True)
 
     return df_out
 
@@ -90,11 +98,15 @@ def _clean_country_list(df):
     # handle recent changes in country names:
     country_rename = {
         'Hong Kong SAR': 'Hong Kong',
+        'Taiwan*': 'Taiwan',
+        'Czechia': 'Czech Republic',
+        'Brunei': 'Brunei Darussalam',
         'Iran (Islamic Republic of)': 'Iran',
         'Viet Nam': 'Vietnam',
         'Russian Federation': 'Russia',
         'Republic of Korea': 'South Korea',
-        'Republic of Moldova': 'Moldova'
+        'Republic of Moldova': 'Moldova',
+        'China': 'Mainland China'
     }
     df.rename(country_rename, axis=0, inplace=True)
 
@@ -124,7 +136,7 @@ def _compute_days_since_first_case(df_cases):
     date_first_case = df_cases[df_cases > 0].idxmin(axis=1)
     days_since_first_case = date_first_case.apply(
         lambda x: (df_cases.columns.max() - x).days)
-    # Add 2 months for China, since outbreak started late 2019:
+    # Add 1 month for China, since outbreak started late 2019:
     days_since_first_case.loc['Mainland China'] += 30
 
     return days_since_first_case

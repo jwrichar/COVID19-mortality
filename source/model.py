@@ -19,10 +19,10 @@ def initialize_model(df):
     _normalize_col(df, 'healthcare_oop_expenditure', how='mean')
     # (4) hospital beds: upper
     # more beds, more healthcare and tests
-    _normalize_col(df, 'hospital_beds', how='upper')
+    _normalize_col(df, 'hospital_beds', how='mean')
     # (5) hci = human capital index: upper
     # HCI measures education/health; mu_0 should reflect best scenario
-    _normalize_col(df, 'hci', how='upper')
+    _normalize_col(df, 'hci', how='mean')
     # (6) % over 65: mean
     # mu_0 to reflect average world demographic
     _normalize_col(df, 'population_perc_over65', how='mean')
