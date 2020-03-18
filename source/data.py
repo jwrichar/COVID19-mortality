@@ -1,5 +1,7 @@
 from datetime import datetime
+import json
 import os
+import requests
 
 import numpy as np
 import pandas as pd
@@ -41,8 +43,8 @@ def get_all_data():
         axis=1)
 
     # Add covariate for days since first case
-    df_out['days_since_first_case'] = _compute_days_since_first_case(
-        covid_cases_rollup)
+    df_out['days_since_first_case'] = _compute_days_since_nth_case(
+        covid_cases_rollup, n=1)
 
     # Add CPI covariate:
     _add_cpi_data(df_out)
@@ -56,6 +58,121 @@ def get_all_data():
     print('Dropping %i/%i countries due to lack of data' %
           (len(to_drop_idx), len(df_out)))
     df_out.drop(to_drop_idx, axis=0, inplace=True)
+
+    return df_out
+
+
+def get_data_case_count_model():
+    ''' Get data for case count model '''
+
+    all_covid_data = _get_latest_covid_timeseries()
+
+    covid_cases_rollup = _rollup_by_country(all_covid_data['Confirmed'])
+    covid_deaths_rollup = _rollup_by_country(all_covid_data['Deaths'])
+
+    _clean_country_list(covid_cases_rollup)
+    _clean_country_list(covid_deaths_rollup)
+
+    todays_date = covid_cases_rollup.columns.max()
+
+    # Create DataFrame with today's cumulative case and death count, by country
+    df_out = pd.DataFrame({'cases': covid_cases_rollup[todays_date],
+                           'deaths': covid_deaths_rollup[todays_date]})
+
+    # Add observed death rate:
+    df_out['death_rate_observed'] = df_out.apply(
+        lambda row: row['deaths'] / float(row['cases']),
+        axis=1)
+
+    # Add covariate for days since first case
+    df_out['days_since_hundredth_case'] = _compute_days_since_nth_case(
+        covid_cases_rollup, n=100)
+
+    # Add Testing metric:
+    _add_testing_data(df_out)
+
+    df_out = df_out.loc[df_out['tests_per_million'].notnull()]
+
+    return(df_out)
+
+
+def get_statewise_testing_data():
+
+    # Pull testing counts by state:
+    out = requests.get('https://covidtracking.com/api/states')
+    df_out = pd.DataFrame(out.json())
+    df_out.set_index('state', drop=True, inplace=True)
+
+    # Pull time-series of testing counts:
+    ts = requests.get('https://covidtracking.com/api/states/daily')
+    df_ts = pd.DataFrame(ts.json())
+    date_last_week = df_ts['date'].unique()[7]
+    df_ts_last_week = df_ts.loc[df_ts['date'] == date_last_week]
+    df_ts_last_week.set_index('state', drop=True, inplace=True)
+    df_out['num_tests_7_days_ago'] = \
+        (df_ts_last_week['positive'] + df_ts_last_week['negative'])
+    df_out['num_pos_7_days_ago'] = df_ts_last_week['positive']
+
+    # State population:
+    df_pop = pd.read_excel('data/us_population_by_state_2019.xlsx',
+                           skiprows=2, skipfooter=5)
+    with open('data/us-state-name-abbr.json', 'r') as f:
+        state_name_abbr_lookup = json.load(f)
+
+    df_pop.index = df_pop['Geographic Area'].apply(
+        lambda x: str(x).replace('.', '')).map(state_name_abbr_lookup)
+    df_pop = df_pop.loc[df_pop.index.dropna()]
+
+    df_out['total_population'] = df_pop['Total Resident\nPopulation']
+
+    # Drop states with missing total pop:
+    to_drop_idx = df_out.index[df_out['total_population'].isnull()]
+    print('Dropping %i/%i states due to lack of population data' %
+          (len(to_drop_idx), len(df_out)))
+    df_out.drop(to_drop_idx, axis=0, inplace=True)
+
+    # Drop states with missing negative test count:
+    to_drop_idx = df_out.index[df_out['num_tests_7_days_ago'].isnull()]
+    print('Dropping %i/%i states due to lack of negative tests' %
+          (len(to_drop_idx), len(df_out)))
+    df_out.drop(to_drop_idx, axis=0, inplace=True)
+
+    # Drop states with no cases 7 days ago:
+    to_drop_idx = df_out.index[df_out['num_pos_7_days_ago'] == 0]
+    print('Dropping %i/%i states due to lack of positive tests' %
+          (len(to_drop_idx), len(df_out)))
+    df_out.drop(to_drop_idx, axis=0, inplace=True)
+
+    # Fill all other missing vals with 0
+    df_out.fillna(0, inplace=True)
+
+    # Tests per million people
+    df_out['tests_per_million'] = 1e6 * \
+        (df_out['negative'] + df_out['positive']) / df_out['total_population']
+    df_out['tests_per_million_7_days_ago'] = 1e6 * \
+        (df_out['num_tests_7_days_ago']) / df_out['total_population']
+
+    # People per test:
+    df_out['people_per_test'] = 1e6 / df_out['tests_per_million']
+    df_out['people_per_test_7_days_ago'] = 1e6 / df_out['tests_per_million_7_days_ago']
+
+    # Days since outbreak:
+    data_jhu = _get_latest_covid_timeseries()
+    ts_cases = data_jhu['Confirmed']
+    ts_cases = ts_cases.loc[ts_cases['Country/Region'] == 'US']
+
+    df_out['days_since_first_case'] = _get_days_since_nth_state_case(
+        df_out.index, ts_cases, 1, state_name_abbr_lookup)
+
+    # Num cases 7 days ago
+    df_out['num_cases_7_days_ago'] = _get_case_cts_n_days_ago(
+        df_out.index, ts_cases, 7, state_name_abbr_lookup)
+
+    # Add observed death rate:
+    df_out['death_rate_observed'] = df_out.apply(
+        lambda row: 0.0 if row['positive'] == 0 else
+        row['death'] / float(row['num_cases_7_days_ago']),
+        axis=1)
 
     return df_out
 
@@ -87,10 +204,15 @@ def _rollup_by_country(df):
     df_rollup = gb.sum()
     df_rollup.drop(['Lat', 'Long'], axis=1, inplace=True, errors='ignore')
 
+    return _convert_cols_to_dt(df_rollup)
+
+
+def _convert_cols_to_dt(df):
+
     # Convert column strings to dates:
-    idx_as_dt = [datetime.strptime(x, '%m/%d/%y') for x in df_rollup.columns]
-    df_rollup.columns = idx_as_dt
-    return df_rollup
+    idx_as_dt = [datetime.strptime(x, '%m/%d/%y') for x in df.columns]
+    df.columns = idx_as_dt
+    return df
 
 
 def _clean_country_list(df):
@@ -127,17 +249,20 @@ def _clean_country_list(df):
     df.drop(constants.ignore_countries, axis=0, inplace=True, errors='ignore')
 
 
-def _compute_days_since_first_case(df_cases):
+def _compute_days_since_nth_case(df_cases, n=1):
     ''' Compute the country-wise days since first confirmed case
 
     :param df_cases: country-wise time-series of confirmed case counts
     :return: Series of country-wise days since first case
     '''
-    date_first_case = df_cases[df_cases > 0].idxmin(axis=1)
+    date_first_case = df_cases[df_cases >= n].idxmin(axis=1)
     days_since_first_case = date_first_case.apply(
-        lambda x: (df_cases.columns.max() - x).days)
+        lambda x: 0 if pd.isnull(x) else (df_cases.columns.max() - x).days)
     # Add 1 month for China, since outbreak started late 2019:
-    days_since_first_case.loc['Mainland China'] += 30
+    if 'Mainland China' in days_since_first_case.index:
+        days_since_first_case.loc['Mainland China'] += 30
+    # Fill in blanks (not yet reached n cases) with 0s:
+    days_since_first_case.fillna(0, inplace=True)
 
     return days_since_first_case
 
@@ -157,6 +282,8 @@ def _add_cpi_data(df_input):
 
     # Add CPI score to input df:
     df_input['cpi_score_2019'] = cpi_data['CPI score 2019']
+
+    return df_input
 
 
 def _add_wb_data(df_input):
@@ -179,6 +306,25 @@ def _add_wb_data(df_input):
         df_input[var_name] = _get_most_recent_value(wb_series)
 
 
+def _add_testing_data(df_input):
+
+    df_tests = pd.read_csv(
+        ('https://raw.githubusercontent.com/owid/owid-datasets/master/'
+         'datasets/COVID-19%20Tests%20per%20million%20people/'
+         'COVID-19%20Tests%20per%20million%20people.csv'),
+        index_col='Entity')
+
+    country_rename = {
+        'United States - CDC samples tested': 'US',
+        'China - Guangdong': 'Mainland China',
+        'South Korea': 'Korea, South'
+    }
+    df_tests.rename(country_rename, axis=0, inplace=True)
+
+    df_input['tests_per_million'] = \
+        df_tests['Total COVID-19 tests performed per million people']
+
+
 def _get_most_recent_value(wb_series):
     '''
     Get most recent non-null value for each country in the World Bank
@@ -194,3 +340,39 @@ def _get_most_recent_value(wb_series):
             return np.nan
 
     return ts_data.apply(_helper, axis=1)
+
+
+def _get_days_since_nth_state_case(state_abbrs, ts_cases, n,
+                                   state_name_abbr_lookup):
+
+    state_cases = [ts_cases.loc[ts_cases['Province/State'].apply(
+        lambda x: (', %s' % sa in x) or
+        (x == _state_name_lookup(state_name_abbr_lookup, sa)))].sum() for
+        sa in state_abbrs]
+
+    state_cases = pd.DataFrame(state_cases,
+                               index=state_abbrs,
+                               columns=state_cases[0].index)
+    state_cases = state_cases[state_cases.columns[4::]]
+    state_cases = _convert_cols_to_dt(state_cases)
+    return _compute_days_since_nth_case(state_cases, n=n)
+
+
+def _get_case_cts_n_days_ago(state_abbrs, ts_cases, n,
+                             state_name_abbr_lookup):
+
+    state_cases = [ts_cases.loc[ts_cases['Province/State'].apply(
+        lambda x: (', %s' % sa in x) or
+        (x == _state_name_lookup(state_name_abbr_lookup, sa)))].sum() for
+        sa in state_abbrs]
+
+    state_cases = pd.DataFrame(state_cases,
+                               index=state_abbrs,
+                               columns=state_cases[0].index)
+    state_cases = state_cases[state_cases.columns[4::]]
+    return state_cases[[state_cases.columns[-n]]]
+
+
+def _state_name_lookup(state_name_abbr_lookup, state_abbr):
+    return next(key for key, value in state_name_abbr_lookup.items()
+                if value == state_abbr)
