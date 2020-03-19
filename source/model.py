@@ -75,89 +75,11 @@ def initialize_model(df):
     return covid_mortality_model
 
 
-def case_count_model(df):
-
-    # Normalize inputs in a way that is sensible:
-
-    # (1) days since first case: upper
-    # to reflect asymptotic mortality rate months after outbreak
-    _normalize_col(df, 'days_since_hundredth_case', how='upper')
-    # (2) tests per capita: upper
-    # to reflect best-case testing scenario
-    #_normalize_col(df, 'tests_per_million', how='upper')
-
-    n = len(df)
-
-    # For each country, let:
-    # c_obs = number of observed cases
-    c_obs = df['cases'].values
-    # c_star = number of true cases
-
-    # d_obs = number of observed deaths
-    d_obs = df['deaths'].values
-    # T = inverse of total number tested per million (normalized)
-    inv_test_rate = (10. / df['tests_per_million']).values
-    # o = outbreak time (time since 100th case, normalized)
-    outbreak_time = df['days_since_hundredth_case_normalized'].values
-
-    covid_case_count_model = pm.Model()
-
-    with covid_case_count_model:
-
-        # Priors:
-        mu_0 = pm.Beta('mu_0', alpha=0.3, beta=10)
-        # sig_0 = pm.Uniform('sig_0', lower=0.0, upper=mu_0 * (1 - mu_0))
-        # alpha = pm.Normal('alpha', mu=0, sigma=2, shape=1)
-        beta = pm.Bound(pm.Normal, lower=0.0)('beta', mu=1, sigma=10, shape=1)
-        sigma = pm.HalfNormal('sigma', sigma=5)
-        # sigma_1 = pm.HalfNormal('sigma_1', sigma=5)
-
-        # Model c_star (true case counts) as Poisson regression:
-        # log(c_star) ~ N(log(c_obs) + beta_0 + beta_1*T, sigma^2)
-        c_obs_log = np.log(c_obs)
-        c_est = c_obs_log + beta[0] * inv_test_rate
-        c_star_log = pm.Normal('c_star_log',
-                               mu=c_est,
-                               sigma=sigma,
-                               shape=n)
-        c_star = np.exp(c_star_log)
-
-        # # Model death rate as logistic regression:
-        # mu_0_logit = np.log(mu_0 / (1 - mu_0))
-        # mu_est = mu_0_logit + alpha[0] * outbreak_time
-        # mu_model_logit = pm.Normal('mu_model_logit',
-        #                            mu=mu_est,
-        #                            sigma=sigma_1,
-        #                            shape=n)
-        # Transform back to probability space:
-        # mu_model = np.exp(mu_model_logit) / (np.exp(mu_model_logit) + 1)
-
-        # tau_i, mortality rate for each country
-        # Parametrize with (mu, sigma)
-        # instead of (alpha, beta) to ease interpretability.
-        # tau = pm.Beta('tau', mu=mu_0, sigma=sig_0, shape=n)
-        # tau = pm.Beta('tau', mu=mu_0, sigma=sig_0, shape=n)
-
-        # Binomial likelihood:
-        d = pm.Binomial('d',
-                        n=c_star,
-                        p=mu_0,
-                        observed=d_obs)
-
-    return covid_case_count_model
-
-
 def case_count_model_us_states(df):
 
     # Normalize inputs in a way that is sensible:
 
-    # (1) days since first case: upper
-    # to reflect asymptotic mortality rate months after outbreak
-    _normalize_col(df, 'days_since_first_case', how='upper')
-    # (1a) num cases 1 week ago
-    # _normalize_col(df, 'num_cases_7_days_ago', how='upper')
-
-    # (2) people per test: normalize to South Korea
+    # People per test: normalize to South Korea
     # assuming S.K. testing is "saturated"
     ppt_sk = np.log10(51500000. / 250000)
     df['people_per_test_normalized'] = (
@@ -174,9 +96,6 @@ def case_count_model_us_states(df):
     d_obs = df[['death', 'num_pos_7_days_ago']].min(axis=1).values
     # people per test
     people_per_test = df['people_per_test_normalized'].values
-    # outbreak time (time since 1st case, normalized)
-    # outbreak_time = df['days_since_first_case_normalized'].values
-    # num_cases_week_ago = df['num_cases_7_days_ago_normalized'].values
 
     covid_case_count_model = pm.Model()
 

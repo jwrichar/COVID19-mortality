@@ -106,12 +106,19 @@ def get_statewise_testing_data():
     # Pull time-series of testing counts:
     ts = requests.get('https://covidtracking.com/api/states/daily')
     df_ts = pd.DataFrame(ts.json())
+
+    # Get data from last week
     date_last_week = df_ts['date'].unique()[7]
-    df_ts_last_week = df_ts.loc[df_ts['date'] == date_last_week]
-    df_ts_last_week.set_index('state', drop=True, inplace=True)
+    df_ts_last_week = _get_test_counts(df_ts, df_out.index, date_last_week)
     df_out['num_tests_7_days_ago'] = \
         (df_ts_last_week['positive'] + df_ts_last_week['negative'])
     df_out['num_pos_7_days_ago'] = df_ts_last_week['positive']
+
+    # Get data from today
+    date_today = df_ts['date'].unique()[1]
+    df_ts_today = _get_test_counts(df_ts, df_out.index, date_today)
+    df_out['num_tests_today'] = \
+        (df_ts_today['positive'] + df_ts_today['negative'])
 
     # State population:
     df_pop = pd.read_excel('data/us_population_by_state_2019.xlsx',
@@ -125,56 +132,53 @@ def get_statewise_testing_data():
 
     df_out['total_population'] = df_pop['Total Resident\nPopulation']
 
+    # Drop states with messed up / missing data:
+
     # Drop states with missing total pop:
     to_drop_idx = df_out.index[df_out['total_population'].isnull()]
-    print('Dropping %i/%i states due to lack of population data' %
-          (len(to_drop_idx), len(df_out)))
+    print('Dropping %i/%i states due to lack of population data: %s' %
+          (len(to_drop_idx), len(df_out), ', '.join(to_drop_idx)))
     df_out.drop(to_drop_idx, axis=0, inplace=True)
 
     # Drop states with missing negative test count:
     to_drop_idx = df_out.index[df_out['num_tests_7_days_ago'].isnull()]
-    print('Dropping %i/%i states due to lack of negative tests' %
-          (len(to_drop_idx), len(df_out)))
+    print('Dropping %i/%i states due to lack of tests: %s' %
+          (len(to_drop_idx), len(df_out), ', '.join(to_drop_idx)))
     df_out.drop(to_drop_idx, axis=0, inplace=True)
 
     # Drop states with no cases 7 days ago:
     to_drop_idx = df_out.index[df_out['num_pos_7_days_ago'] == 0]
-    print('Dropping %i/%i states due to lack of positive tests' %
-          (len(to_drop_idx), len(df_out)))
+    print('Dropping %i/%i states due to lack of positive tests: %s' %
+          (len(to_drop_idx), len(df_out), ', '.join(to_drop_idx)))
     df_out.drop(to_drop_idx, axis=0, inplace=True)
 
-    # Fill all other missing vals with 0
-    df_out.fillna(0, inplace=True)
-
-    # Tests per million people
+    # Tests per million people, based on today's test coverage
     df_out['tests_per_million'] = 1e6 * \
-        (df_out['negative'] + df_out['positive']) / df_out['total_population']
+        (df_out['num_tests_today']) / df_out['total_population']
     df_out['tests_per_million_7_days_ago'] = 1e6 * \
         (df_out['num_tests_7_days_ago']) / df_out['total_population']
 
     # People per test:
     df_out['people_per_test'] = 1e6 / df_out['tests_per_million']
-    df_out['people_per_test_7_days_ago'] = 1e6 / df_out['tests_per_million_7_days_ago']
-
-    # Days since outbreak:
-    data_jhu = _get_latest_covid_timeseries()
-    ts_cases = data_jhu['Confirmed']
-    ts_cases = ts_cases.loc[ts_cases['Country/Region'] == 'US']
-
-    df_out['days_since_first_case'] = _get_days_since_nth_state_case(
-        df_out.index, ts_cases, 1, state_name_abbr_lookup)
-
-    # Num cases 7 days ago
-    df_out['num_cases_7_days_ago'] = _get_case_cts_n_days_ago(
-        df_out.index, ts_cases, 7, state_name_abbr_lookup)
-
-    # Add observed death rate:
-    df_out['death_rate_observed'] = df_out.apply(
-        lambda row: 0.0 if row['positive'] == 0 else
-        row['death'] / float(row['num_cases_7_days_ago']),
-        axis=1)
+    df_out['people_per_test_7_days_ago'] = \
+        1e6 / df_out['tests_per_million_7_days_ago']
 
     return df_out
+
+
+def _get_test_counts(df_ts, state_list, date):
+
+    ts_list = []
+    for state in state_list:
+        state_ts = df_ts.loc[df_ts['state'] == state]
+        # Back-fill any gaps to avoid crap data gaps
+        state_ts.fillna(method='bfill', inplace=True)
+
+        record = state_ts.loc[df_ts['date'] == date]
+        ts_list.append(record)
+
+    df_ts = pd.concat(ts_list, ignore_index=True)
+    return df_ts.set_index('state', drop=True)
 
 
 def _get_latest_covid_timeseries():
