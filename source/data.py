@@ -97,6 +97,15 @@ def get_data_case_count_model():
 
 
 def get_statewise_testing_data():
+    ''' Pull all statewise data required for model fitting and
+    prediction
+
+    Returns:
+    * df_out: DataFrame for model fitting where inclusion
+        requires testing data from 7 days ago
+    * df_pred: DataFrame for count prediction where inclusion
+        only requires testing data from today
+    '''
 
     # Pull testing counts by state:
     out = requests.get('https://covidtracking.com/api/states')
@@ -132,26 +141,6 @@ def get_statewise_testing_data():
 
     df_out['total_population'] = df_pop['Total Resident\nPopulation']
 
-    # Drop states with messed up / missing data:
-
-    # Drop states with missing total pop:
-    to_drop_idx = df_out.index[df_out['total_population'].isnull()]
-    print('Dropping %i/%i states due to lack of population data: %s' %
-          (len(to_drop_idx), len(df_out), ', '.join(to_drop_idx)))
-    df_out.drop(to_drop_idx, axis=0, inplace=True)
-
-    # Drop states with missing negative test count:
-    to_drop_idx = df_out.index[df_out['num_tests_7_days_ago'].isnull()]
-    print('Dropping %i/%i states due to lack of tests: %s' %
-          (len(to_drop_idx), len(df_out), ', '.join(to_drop_idx)))
-    df_out.drop(to_drop_idx, axis=0, inplace=True)
-
-    # Drop states with no cases 7 days ago:
-    to_drop_idx = df_out.index[df_out['num_pos_7_days_ago'] == 0]
-    print('Dropping %i/%i states due to lack of positive tests: %s' %
-          (len(to_drop_idx), len(df_out), ', '.join(to_drop_idx)))
-    df_out.drop(to_drop_idx, axis=0, inplace=True)
-
     # Tests per million people, based on today's test coverage
     df_out['tests_per_million'] = 1e6 * \
         (df_out['num_tests_today']) / df_out['total_population']
@@ -163,7 +152,35 @@ def get_statewise_testing_data():
     df_out['people_per_test_7_days_ago'] = \
         1e6 / df_out['tests_per_million_7_days_ago']
 
-    return df_out
+    # Drop states with messed up / missing data:
+    # Drop states with missing total pop:
+    to_drop_idx = df_out.index[df_out['total_population'].isnull()]
+    print('Dropping %i/%i states due to lack of population data: %s' %
+          (len(to_drop_idx), len(df_out), ', '.join(to_drop_idx)))
+    df_out.drop(to_drop_idx, axis=0, inplace=True)
+
+    df_pred = df_out.copy(deep=True)  # Prediction DataFrame
+
+    # Criteria for model fitting:
+    # Drop states with missing test count 7 days ago:
+    to_drop_idx = df_out.index[df_out['num_tests_7_days_ago'].isnull()]
+    print('Dropping %i/%i states due to lack of tests: %s' %
+          (len(to_drop_idx), len(df_out), ', '.join(to_drop_idx)))
+    df_out.drop(to_drop_idx, axis=0, inplace=True)
+    # Drop states with no cases 7 days ago:
+    to_drop_idx = df_out.index[df_out['num_pos_7_days_ago'] == 0]
+    print('Dropping %i/%i states due to lack of positive tests: %s' %
+          (len(to_drop_idx), len(df_out), ', '.join(to_drop_idx)))
+    df_out.drop(to_drop_idx, axis=0, inplace=True)
+
+    # Criteria for model prediction:
+    # Drop states with missing test count today:
+    to_drop_idx = df_pred.index[df_pred['num_tests_today'].isnull()]
+    print('Dropping %i/%i states due to lack of tests: %s' %
+          (len(to_drop_idx), len(df_pred), ', '.join(to_drop_idx)))
+    df_pred.drop(to_drop_idx, axis=0, inplace=True)
+
+    return df_out, df_pred
 
 
 def _get_test_counts(df_ts, state_list, date):
