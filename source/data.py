@@ -183,6 +183,42 @@ def get_statewise_testing_data():
     return df_out, df_pred
 
 
+def get_county_data():
+    ''' Get data for COVID-19 at the U.S. county level '''
+    df_covid = pd.read_csv(
+        ('https://raw.githubusercontent.com/nytimes/'
+         'covid-19-data/master/us-counties.csv'))
+    df_covid.dropna(axis=0, subset=['fips'], inplace=True)
+    latest_date = df_covid['date'].max()
+    df_covid['fips'] = df_covid['fips'].astype(int)
+
+    print('Getting data for %s' % latest_date)
+
+    df_covid_today = df_covid.loc[df_covid['date'] == latest_date]
+
+    df_population = pd.read_csv(
+        os.path.join(DATA_DIR, 'co-est2019-alldata.csv'),
+        usecols=['COUNTY', 'STATE', 'POPESTIMATE2019'])
+    df_population['fips'] = list(
+        map(lambda x, y: 1000 * x + y,
+            df_population['STATE'], df_population['COUNTY']))
+
+    df = df_covid_today.merge(df_population, how='left', on='fips')
+
+    df['Cases per 100k'] = list(
+        map(lambda x, y: round(x * 1e5 / y, 1),
+            df['cases'], df['POPESTIMATE2019']))
+
+    df['Deaths per 100k'] = list(
+        map(lambda x, y: round(x * 1e5 / y, 1),
+            df['deaths'], df['POPESTIMATE2019']))
+
+    df['fips'] = df['fips'].apply(
+        lambda x: str(x) if x >= 10000 else '0%i' % x)
+
+    return df
+
+
 def _get_test_counts(df_ts, state_list, date):
 
     ts_list = []
