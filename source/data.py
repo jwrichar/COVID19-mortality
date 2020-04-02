@@ -190,13 +190,17 @@ def get_county_data():
          'covid-19-data/master/us-counties.csv'))
     df_covid.dropna(axis=0, subset=['fips'], inplace=True)
     latest_date = df_covid['date'].max()
-    week_ago_date = df_covid['date'].unique()[-7]
+    week_ago_date = df_covid['date'].unique()[-8]
+    yesterday_date = df_covid['date'].unique()[-2]
     df_covid['fips'] = df_covid['fips'].astype(int)
 
     print('Getting data for %s' % latest_date)
 
     df_covid_today = df_covid.loc[df_covid['date'] == latest_date]
     df_covid_today.set_index('fips', inplace=True, drop=True)
+
+    df_covid_yesterday = df_covid.loc[df_covid['date'] == yesterday_date]
+    df_covid_yesterday.set_index('fips', inplace=True, drop=True)
 
     df_covid_7days = df_covid.loc[df_covid['date'] == week_ago_date]
     df_covid_7days.set_index('fips', inplace=True, drop=True)
@@ -211,6 +215,9 @@ def get_county_data():
     df = df_covid_today.merge(df_population, how='left', on='fips')
     df.set_index('fips', inplace=True, drop=False)
 
+    df['cases_yesterday'] = df_covid_yesterday['cases']
+    df['deaths_yesterday'] = df_covid_yesterday['deaths']
+
     df['cases_7days'] = df_covid_7days['cases']
     df['deaths_7days'] = df_covid_7days['deaths']
 
@@ -224,20 +231,31 @@ def get_county_data():
             df['deaths'], df['POPESTIMATE2019']))
 
     # Compute cases/deaths per 100k - last week
+    df['Cases per 100k yesterday'] = list(
+        map(lambda x, y: round(x * 1e5 / y, 1),
+            df['cases_yesterday'], df['POPESTIMATE2019']))
+    df['Deaths per 100k yesterday'] = list(
+        map(lambda x, y: round(x * 1e5 / y, 1),
+            df['deaths_yesterday'], df['POPESTIMATE2019']))
+
+    # Compute cases/deaths per 100k - last week
     df['Cases per 100k last week'] = list(
         map(lambda x, y: round(x * 1e5 / y, 1),
             df['cases_7days'], df['POPESTIMATE2019']))
-
     df['Deaths per 100k last week'] = list(
         map(lambda x, y: round(x * 1e5 / y, 1),
             df['deaths_7days'], df['POPESTIMATE2019']))
 
     # Percentage change in cases/deaths per 100k
-    df['Case Growth Rate'] = round(
+    df['New Cases per 100k'] = round(
+        (df['Cases per 100k'] - df['Cases per 100k yesterday']), 1)
+    df['New Deaths per 100k'] = round(
+        (df['Deaths per 100k'] - df['Deaths per 100k yesterday']), 1)
+
+    df['Case Growth Rate 1 week'] = round(
         100 * (df['Cases per 100k'] - df['Cases per 100k last week']) /
         df['Cases per 100k last week'], 1)
-
-    df['Death Growth Rate'] = round(
+    df['Death Growth Rate 1 week'] = round(
         100 * (df['Deaths per 100k'] - df['Deaths per 100k last week']) /
         df['Cases per 100k last week'], 1)
 
@@ -247,7 +265,7 @@ def get_county_data():
     df['fips'] = df['fips'].apply(
         lambda x: str(x) if x >= 10000 else '0%i' % x)
 
-    return df
+    return df, latest_date
 
 
 def _get_test_counts(df_ts, state_list, date):
