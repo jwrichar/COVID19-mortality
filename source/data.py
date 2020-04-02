@@ -213,6 +213,9 @@ def get_county_data():
         map(lambda x, y: round(x * 1e5 / y, 1),
             df['deaths'], df['POPESTIMATE2019']))
 
+    df.rename(columns={'POPESTIMATE2019': 'Total Population'},
+              inplace=True)
+
     df['fips'] = df['fips'].apply(
         lambda x: str(x) if x >= 10000 else '0%i' % x)
 
