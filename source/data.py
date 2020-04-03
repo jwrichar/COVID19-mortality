@@ -188,6 +188,8 @@ def get_county_data():
     df_covid = pd.read_csv(
         ('https://raw.githubusercontent.com/nytimes/'
          'covid-19-data/master/us-counties.csv'))
+    # Fix NYC FIPS:
+    df_covid['fips'].loc[df_covid['county'] == 'New York City'] = 36061
     df_covid.dropna(axis=0, subset=['fips'], inplace=True)
     latest_date = df_covid['date'].max()
     week_ago_date = df_covid['date'].unique()[-8]
